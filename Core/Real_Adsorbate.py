@@ -36,47 +36,6 @@ class FindAdsorptionSites():
                         triplets.append(triplet)
         triplets.sort()
         self.hollow_positions = list(triplet for triplet, _ in itertools.groupby(triplets))
-
-    def addatom_ontop(self, indices, distance):
-        atoms_addatoms = self.get_ase_atoms()
-        
-        for index in indices:
-            cn = self.get_coordination_number(index)
-            position = self.get_position(index)
-            unit, length = math.get_unit_vector(position)
-            tilted_vector, _ = math.get_unit_vector(unit + math.get_perpendicular_vector(unit))
-        
-            if cn == 4 or cn == 6:
-                C_distance = unit*(length + distance)
-                O_distance = C_distance + (tilted_vector*1.15)
-
-            if cn == 7:
-                edge_perp_vec = math.get_perpendicular_edge_vector(position)
-                perp_vector = math.get_perpendicular_vector(edge_perp_vec)
-                tilted_vector,_  = math.get_unit_vector(edge_perp_vec + perp_vector)                                   
-                C_distance = (unit * length) + (edge_perp_vec * distance)
-                O_distance = C_distance + (tilted_vector*1.15)
-
-            if cn == 9:
-                around = self.get_coordination_atoms(index)
-                plane = [self.get_position(x) for x in around if self.get_coordination_number(x) < 12]
-                normal = math.get_normal_vector(plane)
-                dot_prod = math.get_dot_product(unit, normal)
-                direction = dot_prod/abs(dot_prod)
-                normal = normal * direction
-                perp_vector = math.get_perpendicular_vector(normal)
-                tilted_vector, _ = math.get_unit_vector(normal + perp_vector)
-                C_distance = (unit*length) + (normal*distance)
-                O_distance = C_distance + (tilted_vector*1.15)
-
-            add_atom1 = Atoms('O')
-            #add_atom2 = Atoms('O')    
-            add_atom1.translate(C_distance)
-            #add_atom2.translate(O_distance)
-            atoms_addatoms += add_atom1
-            #atoms_addatoms += add_atom2
-        
-        return atoms_addatoms
     
     def find_plane_np(self, tolerance = 1):
         indices = self.get_atoms_in_the_surface_plane(7, edges_corner=True)
@@ -90,40 +49,6 @@ class FindAdsorptionSites():
                 
         return plane, normal_vector
     
-    def add_atom_bridge(self, particle, tolerance, add_atom):
-        plane, normal_vector = self.find_plane_np(tolerance)
-    
-        for bridge_position in bridge_positions:
-            atom_positions = [particle.get_position(index) for index in bridge_position]
-            point = math.find_middle_point(atom_positions) 
-            unit_vector1, length1 = math.get_unit_vector(point)
-            unit_vector2, length2 = math.get_unit_vector(normal_vector)
-            dot_prod = np.dot(unit_vector1, unit_vector2)
-            direction = dot_prod/abs(dot_prod)
-            ads = Atoms(add_atom)
-            bridge_position = (unit_vector1*(length1))+(direction*unit_vector2*(1.4))
-            ads.translate(bridge_position)
-            particle.add_atoms(ads)
-
-        return particle
-
-    def add_atom_hollow(self, particle, add_atom):
-    
-        for hollow_position in self.hollow_positions:
-            atom_positions = [particle.get_position(index) for index in hollow_position]
-            middle_point = math.find_middle_point(atom_positions)
-            normal_vector = math.get_normal_vector(atom_positions) 
-            unit_vector1, length1 = math.get_unit_vector(middle_point)
-            unit_vector2, length2 = math.get_unit_vector(normal_vector)
-            dot_prod = np.dot(unit_vector1, unit_vector2)
-            direction = dot_prod/abs(dot_prod)
-            ads = Atoms(add_atom)
-            bridge_position = (unit_vector1*(length1))+(direction*unit_vector2*(1.4))
-            ads.translate(bridge_position)
-            particle.add_atoms(ads)
-
-        return particle
-
 class PlaceAddAtoms():
     """Class that plance add atoms on positions identified by FindAdsorptionSites"""
     def __init__(self, symbols):
@@ -133,6 +58,7 @@ class PlaceAddAtoms():
         self.hollow_positions = {''.join(list(site)) : [] for site in itertools.combinations_with_replacement(self.symbols,3)}
 
     def bind_particle(self, particle):
+        particle.atoms.atoms.translate(-particle.atoms.atoms.get_center_of_mass())
         self.adsorption_sites.get_bridge_sites(particle)
         self.adsorption_sites.get_hollow_sites(particle)  
         self.get_bridge_sties(particle)
@@ -148,28 +74,51 @@ class PlaceAddAtoms():
     def get_hollow_sties(self, particle):
         for triplet in self.adsorption_sites.hollow_positions:
             self.hollow_positions[''.join(sorted(particle.get_symbols(triplet)))].append(triplet)
-
-    def place_add_atom(self, particle, add_atom_symbol, sites):
+    
+    def get_xyz_site_from_atom_indices(self, particle, site):
         
-        for site in sites:
+        if isinstance(site, (np.ndarray, np.generic)) or isinstance(site, int):
+            unit_vector1, length1 = math.get_unit_vector(particle.get_position(site))
+            xyz_site = (unit_vector1*(length1+2))
+        else:
             xyz_atoms = [particle.get_position(atom_index) for atom_index in site]
             xyz_site_plane = math.find_middle_point(xyz_atoms)
             unit_vector1, length1 = math.get_unit_vector(xyz_site_plane)
             if len(site) == 3:
                 normal_vector = math.get_normal_vector(xyz_atoms) 
             if len(site) == 2:
-                center_of_mass = particle.atoms.atoms.get_center_of_mass()
-                normal_vector = math.get_bridge_perpendicular_line(xyz_atoms, center_of_mass)
+                third_atom = self.find_plane_for_bridge_atoms(particle, site)
+                xyz_third_atom = particle.get_position(third_atom)
+                xyz_atoms.append(xyz_third_atom)
+                normal_vector = math.get_normal_vector(xyz_atoms)
+                
             unit_vector2, length2 = math.get_unit_vector(normal_vector)
             dot_prod = np.dot(unit_vector1, unit_vector2)
             direction = dot_prod/abs(dot_prod)
-            
-            add_atom = Atoms(add_atom_symbol)   
             xyz_site = (unit_vector1*(length1))+(direction*unit_vector2*(1.4))
+   
+        return xyz_site
+
+    def place_add_atom(self, particle, add_atom_symbol, sites):
+        add_atom_list = []
+        for site in sites:
+            xyz_site = self.get_xyz_site_from_atom_indices(particle, site)
+            add_atom = Atoms(add_atom_symbol)   
             add_atom.translate(xyz_site)
+            add_atom_list.append(add_atom)
+            
+        for add_atom in add_atom_list:
             particle.add_atoms(add_atom)
             
-        return particle
+        return particle    
+    
+    def find_plane_for_bridge_atoms(self, particle, indices):
+        uncoordinated_atoms = particle.get_atom_indices_from_coordination_number(range(10))
+        uncoordinated_atoms = set(uncoordinated_atoms)
+        shell_1 = set(particle.get_coordination_atoms(indices[0]))
+        shell_2 = set(particle.get_coordination_atoms(indices[1]))
+        shared_atoms = uncoordinated_atoms.intersection(shell_1.intersection(shell_2))
+        return list(shared_atoms)[0]
 
 
 
