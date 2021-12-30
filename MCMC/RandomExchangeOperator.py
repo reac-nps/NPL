@@ -32,3 +32,14 @@ class RandomExchangeOperator:
 
         particle.swap_symbols(zip(symbol1_indices, symbol2_indices))
         return list(zip(symbol1_indices, symbol2_indices))
+
+        
+    def random_exchange_plus_adsorbate_migration(self, particle, number_of_addatoms):
+        n_exchanges = min(np.random.geometric(p=self.p_geometric, size=1)[0], self.max_exchanges)
+        symbol1_indices = np.random.choice(particle.get_indices_by_symbol(self.symbol1), n_exchanges, replace=False)
+        symbol2_indices = np.random.choice(particle.get_indices_by_symbol(self.symbol2), n_exchanges, replace=False)
+
+        adsorbate_positions = np.random.choice(self.adsorbate_sites, number_of_addatoms, replace=False)
+        particle.swap_symbols(zip(symbol1_indices, symbol2_indices))
+
+        return list(zip(symbol1_indices, symbol2_indices)), adsorbate_positions

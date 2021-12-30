@@ -96,6 +96,8 @@ class TopologicalFeatureClassifier(SimpleFeatureClassifier):
         particle.set_feature_vector(self.feature_key, feature_vector)
 
 
+
+
 class NearestNeighborsClusterExpansion(SimpleFeatureClassifier):
     def __init__(self, symbols):
         SimpleFeatureClassifier.__init__(self, symbols)

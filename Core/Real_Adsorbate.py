@@ -35,23 +35,6 @@ class FindAdsorptionSites():
                 triplet = sorted(triplet)
                 if triplet not in self.hollow_positions:
                     self.hollow_positions.append(triplet)
-
-    #def get_hollow_sites(self, particle):
-    #    dict_bridge_positions = {index_1 : [] for index_1, index_2 in self.bridge_positions}
-    #    for index_1, index_2 in self.bridge_positions:
-    #        dict_bridge_positions[index_1].append(index_2)
-#
-    #    triplets = []
-    #    for index_1, indices in dict_bridge_positions.items():
-    #        for index_2 in indices:
-    #            for index_3 in indices:
-    #                triplet = [index_1, index_2]
-    #                if index_3 in dict_bridge_positions[index_2]:
-    #                    triplet.append(index_3)
-    #                    triplet = sorted(triplet)
-    #                    triplets.append(triplet)
-    #    triplets.sort()
-    #    self.hollow_positions = list(triplet for triplet, _ in itertools.groupby(triplets))
     
     def find_plane_for_bridge_atoms(self, particle, indices):
         uncoordinated_atoms = particle.get_atom_indices_from_coordination_number(range(10))
@@ -109,7 +92,7 @@ class PlaceAddAtoms():
             if len(site) == 3:
                 normal_vector = math.get_normal_vector(xyz_atoms) 
             if len(site) == 2:
-                third_atom = list(self.find_plane_for_bridge_atoms(particle, site))[0]
+                third_atom = list(self.adsorption_sites.find_plane_for_bridge_atoms(particle, site))[0]
                 xyz_third_atom = particle.get_position(third_atom)
                 xyz_atoms.append(xyz_third_atom)
                 normal_vector = math.get_normal_vector(xyz_atoms)
@@ -133,14 +116,6 @@ class PlaceAddAtoms():
             particle.add_atoms(add_atom)
             
         return particle    
-    
-    def find_plane_for_bridge_atoms(self, particle, indices):
-        uncoordinated_atoms = particle.get_atom_indices_from_coordination_number(range(10))
-        uncoordinated_atoms = set(uncoordinated_atoms)
-        shell_1 = set(particle.get_coordination_atoms(indices[0]))
-        shell_2 = set(particle.get_coordination_atoms(indices[1]))
-        shared_atoms = uncoordinated_atoms.intersection(shell_1.intersection(shell_2))
-        return list(shared_atoms)
 
 
 
