@@ -38,28 +38,31 @@ def update_atomic_features(exchanges, local_env_calculator, local_feature_classi
     local_feature_classifier.compute_feature_vector(particle, recompute_atom_features=False)
     return particle, neighborhood
 
-def energy_correction_from_adsorbate(particle, adsorbed_sites):
-    energy_gain = 0
-    for site_index in adsorbed_sites:
-        for atom in site_index:
-            if atom in particle.get_indices_by_symbol('Au'):
-                energy_gain += -0.1
-            else:
-                energy_gain += -1
-    return energy_gain
-
-def run_monte_carlo(beta, max_steps, start_particle, energy_calculator, local_feature_classifier, absorbate_placer=None):
+def run_monte_carlo(beta, max_steps, start_particle, energy_calculator, local_feature_classifier, adsorbate=None):
     energy_key, local_env_calculator, exchange_operator = setup_monte_carlo(start_particle, energy_calculator,
                                                                             local_feature_classifier)
 
-    if adsorbate_plancer not None:
-        initial_adsorbed_sites = adsorbate_plancer.adsorbed_sites # list of index switched on
-        number_of_adsorbates = len(initial_adsorbed_sites)
-        atom_to_place = adsorbate_plancer.symbol
+    if adsorbate not None: # dictionary with A-Ads and B-Ads bond energy and number of adsorbates
+        from Core import Adsorption as ADS
+        from itertools import chain
 
-    start_energy = start_particle.get_energy(energy_key) - energy_correction_from_adsorbate(start_particle, initial_adsorbed_sites)
-    lowest_energy = start_energy
-    accepted_energies = [(lowest_energy, 0)]
+        ads = ADS.PlaceAddAtoms(start_particle.get_all_symbols())
+        ads.bind_particle(start_particle)
+        adsorbate['site_list'] = ads.sites_list
+        initial_adsorbed_sites = np.random.choice(adsorbate['site_list'], adsorbate['number_of_ads'])
+
+        def energy_coorection(energy, sites_occupied):
+            for site in itertools.chain(*sites_occupied):
+                energy += adsorbate[start_particle.get_symbol(site)]
+            return energy
+
+        
+
+
+    start_energy = start_particle.get_energy(energy_key)
+    start_energy = energy_coorection(start_energy, initial_adsorbed_sites)
+    stablest_sites = initial_adsorbed_sites
+    accepted_energies = [(lowest_energy, 0, initial_adsorbed_sites)]
 
     found_new_solution = False
     fields = ['energies', 'symbols']
@@ -73,15 +76,15 @@ def run_monte_carlo(beta, max_steps, start_particle, energy_calculator, local_fe
             print("Step: {}".format(total_steps))
             print("Lowest energy: {}".format(lowest_energy))
 
-        exchanges, new_adsorbed_sites = exchange_operator.random_exchange_plus_adsorbate_migration(start_particle, number_of_adsorbates)
-        #start_particle = adsorbate_plancer.place_add_atoms(start_particle, atom_to_place, new_adsorbed_sites)
+        exchanges, new_adsorbed_sites = exchange_operator.random_exchange_plus_adsorbate_migration(start_particle, adsorbate)
 
         start_particle, neighborhood = update_atomic_features(exchanges, local_env_calculator, local_feature_classifier,
                                                               start_particle)
 
         accepted_particle = copy.deepcopy(start_particle)
         energy_calculator.compute_energy(start_particle)
-        new_energy = start_particle.get_energy(energy_key) - energy_correction_from_adsorbate(start_particle, new_adsorbed_sites)
+        new_energy = start_particle.get_energy(energy_key)
+        new_energy = energy_coorection(new_energy, new_adsorbed_sites)
 
 
         delta_e = new_energy - start_energy
@@ -96,11 +99,10 @@ def run_monte_carlo(beta, max_steps, start_particle, energy_calculator, local_fe
                     start_particle.swap_symbols(exchanges)
 
             start_energy = new_energy
-            accepted_energies.append((new_energy, total_steps, accepted_particle, new_adsorbed_sites))
+            accepted_energies.append((new_energy, total_steps, new_adsorbed_sites))
 
             if new_energy < lowest_energy:
                 no_improvement = 0
-                initial_adsorbed_sites = new_adsorbed_sites
                 lowest_energy = new_energy
                 found_new_solution = True
             else:

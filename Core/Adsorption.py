@@ -7,6 +7,11 @@ import itertools
 import numpy as np
 
 
+class Adsorption():
+
+    def __init__(self):
+        pass
+        
 class FindAdsorptionSites():
     """ Class that identify and place add atoms based on the Generalized coordination Numbers of the nanoparticles"""
     def __init__(self):
@@ -26,8 +31,7 @@ class FindAdsorptionSites():
                 if pair not in self.bridge_positions:
                     self.bridge_positions.append(pair)
                     
-    def get_hollow_sites(self, particle):
-        
+    def get_hollow_sites(self, particle):      
         for pair in self.bridge_positions:
             for third_atom in self.find_plane_for_bridge_atoms(particle, pair):
                 triplet = copy.copy(pair)
@@ -49,7 +53,7 @@ class PlaceAddAtoms():
     def __init__(self, symbols):
         self.adsorption_sites = FindAdsorptionSites()
         self.symbols = sorted(symbols)
-        self.adsorption_site_list = []
+        self.sites_list = []
         self.ontop_positions = {site[0] : [] for site in itertools.combinations_with_replacement(self.symbols,1)}
         self.bridge_positions = {''.join(list(site)) : [] for site in itertools.combinations_with_replacement(self.symbols,2)}
         self.hollow_positions = {''.join(list(site)) : [] for site in itertools.combinations_with_replacement(self.symbols,3)}
@@ -76,9 +80,9 @@ class PlaceAddAtoms():
             self.hollow_positions[''.join(sorted(particle.get_symbols(triplet)))].append(triplet)
             
     def get_total_adsorption_sites_xyz(self, particle):
-        self.adsorption_site_list += self.adsorption_sites.ontop_positions
-        self.adsorption_site_list += self.adsorption_sites.bridge_positions
-        self.adsorption_site_list += self.adsorption_sites.hollow_positions
+        self.sites_list += self.adsorption_sites.ontop_positions
+        self.sites_list += self.adsorption_sites.bridge_positions
+        self.sites_list += self.adsorption_sites.hollow_positions
         
     def get_xyz_site_from_atom_indices(self, particle, site):
         
